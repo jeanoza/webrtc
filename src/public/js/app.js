@@ -1,34 +1,21 @@
-// socket to server
-let msgList = document.querySelector("ul");
-let nickForm = document.getElementById("nickname");
-let msgForm = document.getElementById("new_message");
+let socket = io();
 
-let socket = new WebSocket(`ws://${window.location.host}`)
+let welcome = document.getElementById("welcome");
+let form = welcome.querySelector("form");
+let room = document.getElementById("room");
 
-socket.addEventListener("open", () => {
-    console.log("Connected to the Server ✅")
-})
-socket.addEventListener("message", (event) => {
-    let li = document.createElement('li');
-    li.innerText = event.data
-    msgList.appendChild(li)
-})
-socket.addEventListener("close", () => {
-    console.log("Disconnected from the Server ❌")
-})
+room.hidden = true;
 
-
-function handleSubmit (event) {
+function handleRoomSubmit(event) {
     event.preventDefault();
-    let target = event.target;
-    let input = target.querySelector("input");
-    let data = {
-        type:target.id,
-        payload: input.value
-    }
- 
-    socket.send(JSON.stringify(data));
-    input.value = ""
+    let input = form.querySelector("input")
+    let roomName = input.value;
+    //Advanatage of socketIO : able to send Object without stringify - parse
+    socket.emit("enter_room", roomName, () => {
+        welcome.hidden = true;
+        room.hidden = false;
+        document.getElementById("roomTitle").innerText = `Room ${roomName}`;
+    });
+    input.value = "";
 }
-msgForm.addEventListener("submit", handleSubmit)
-nickForm.addEventListener("submit", handleSubmit);
+form.addEventListener("submit", handleRoomSubmit);
