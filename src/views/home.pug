@@ -12,10 +12,12 @@ html(lang="en")
         main
             div#room
                 h3#roomTitle
-                ul
+                ul#chatCont
                 form#welcome
                     input(placeholder="room name", required, type="text")
                     button Enter Room
+                    h4 Open Rooms:
+                        ul
                 form#nickname
                     input(placeholder="nickname", required, type="text")
                     button Save

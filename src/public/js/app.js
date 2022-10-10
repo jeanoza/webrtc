@@ -5,12 +5,15 @@ let room = document.getElementById("room")
 let formWelcome = document.getElementById("welcome")
 let formNick = document.getElementById("nickname")
 let formMSG = document.getElementById("msg")
+let chatCont = document.getElementById("chatCont")
+let roomTitle = document.getElementById("roomTitle")
 
 formNick.hidden = true;
 formMSG.hidden = true;
+chatCont.hidden = true;
 
 let roomName;
-
+let ableToRecv = false;
 
 document.querySelectorAll("form").forEach(form => form.addEventListener("submit", handleSubmit));
 
@@ -22,8 +25,8 @@ function handleSubmit(event) {
 
     if (target.id === "welcome") {
         roomName = value;
-        socket.emit("enterRoom", value, () => {
-            document.getElementById("roomTitle").innerText = `Room ${value}`;
+        socket.emit("enterRoom", value, (userNum) => {
+            roomTitle.innerText = `Room ${roomName} (${userNum})`;
             formWelcome.hidden = true;
             formNick.hidden = false;
         });
@@ -31,7 +34,9 @@ function handleSubmit(event) {
         socket.emit("nickname", value, roomName, () => {
             formNick.hidden = true;
             formMSG.hidden = false;
-            addMSG("You changed nickname to " + value)
+            chatCont.hidden = false;
+            ableToRecv = true;
+            addMSG("You login room #" + roomName + " with nickname: " + value)
         })
     } else if (target.id === "msg") {
         socket.emit("newMessage", value, roomName, () => {
@@ -49,7 +54,23 @@ function addMSG(msg) {
 }
 
 //socket events
-socket.on("welcome", (nick) => { addMSG(`${nick} joined`) })
-socket.on("bye", (nick) => { addMSG(`${nick} left`) })
+socket.on("welcome", (nick, newCount) => {
+    roomTitle.innerText = `Room ${roomName} (${newCount})`;
+    addMSG(`${nick} joined`)
+})
+socket.on("bye", (nick, newCount) => {
+    roomTitle.innerText = `Room ${roomName} (${newCount})`;
+     addMSG(`${nick} left`) 
+})
 socket.on("newMessage", addMSG);
 socket.on("nickname", addMSG);
+socket.on("roomChange", (rooms) => {
+    let ul = formWelcome.querySelector("ul");
+
+    ul.innerText = "";
+    rooms.forEach(room => {
+        let li = document.createElement("li");
+        li.innerText = room
+        ul.appendChild(li)
+    });
+})

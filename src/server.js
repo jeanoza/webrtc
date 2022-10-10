@@ -1,9 +1,9 @@
 
 
 import express from "express";
-import http from "http";
-import WebSocket from "ws";
-import SocketIO from "socket.io"
+import { createServer } from "http";
+import { Server } from "socket.io"
+import { instrument } from "@socket.io/admin-ui";
 
 let app = express();
 let PORT = process.env.PORT || 3000;
@@ -18,18 +18,44 @@ app.get("/*", (_, res) => res.redirect("/"))
 
 let handleListen = () => console.log(`Listening on http://localhost:${PORT} and ws://localhost:${PORT}`)
 
-let server = http.createServer(app)
-let io = SocketIO(server);
+let httpServer = createServer(app);
+
+let io = new Server(httpServer, {
+  cors: {
+    origin: ["https://admin.socket.io"],
+    credentials: true
+  }
+});
+
+instrument(io, {
+  auth: false
+});
+
+function publicRooms () {
+	let {sockets : {adapter: {sids, rooms}}} = io;
+
+	let publicRooms = [];
+	rooms.forEach((_, key) => {
+		if (sids.get(key) === undefined) publicRooms.push(key)
+	})
+	return publicRooms;
+}
+
+function countUserInRoom(roomName) {
+	return io.sockets.adapter.rooms.get(roomName)?.size;
+}
 
 io.on("connection", socket => {
 	socket["nickname"] = "Anonymous"
 	socket.onAny(event => {
 		console.log(event);
 	})
+	io.sockets.emit("roomChange", publicRooms())
 	socket.on("enterRoom", (roomName, done) => {
 		socket.join(roomName);
-		done();
-		socket.to(roomName).emit("welcome", socket.nickname)
+		done(countUserInRoom(roomName));
+		socket.to(roomName).emit("welcome", socket.nickname, countUserInRoom(roomName))
+		io.sockets.emit("roomChange", publicRooms())
 	});
 	socket.on("nickname", (nickname, roomName,done) => {
 		socket["nickname"] = nickname
@@ -41,7 +67,12 @@ io.on("connection", socket => {
 		done();
 	})
 	socket.on("disconnecting", () => {
-		socket.rooms.forEach(room => socket.to(room).emit("bye", socket.nickname))
+		socket.rooms.forEach(roomName => {
+			socket.to(roomName).emit("bye", socket.nickname, countUserInRoom(roomName) - 1)
+		})
+	})
+	socket.on("disconnect", () => {
+		io.sockets.emit("roomChange", publicRooms());
 	})
 }) 
 
@@ -73,4 +104,4 @@ io.on("connection", socket => {
 // 	}) 
 // })
 
-server.listen(3000, handleListen)
+httpServer.listen(3000, handleListen)
