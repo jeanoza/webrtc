@@ -1,76 +1,71 @@
 let socket = io();
 
-let room = document.getElementById("room")
+let myFace = document.getElementById("myFace");
+let mute = document.getElementById("mute")
+let camera = document.getElementById("camera")
+let cameraSelect = document.getElementById("cameras");
 
-let formWelcome = document.getElementById("welcome")
-let formNick = document.getElementById("nickname")
-let formMSG = document.getElementById("msg")
-let chatCont = document.getElementById("chatCont")
-let roomTitle = document.getElementById("roomTitle")
+let myStream;
+let isMute = false;
+let isCameraOff = false;
 
-formNick.hidden = true;
-formMSG.hidden = true;
-chatCont.hidden = true;
+document.querySelectorAll('button').forEach(btn => btn.addEventListener("click", handleBtn))
+cameraSelect.addEventListener("input", handleChangeCamera)
 
-let roomName;
-let ableToRecv = false;
-
-document.querySelectorAll("form").forEach(form => form.addEventListener("submit", handleSubmit));
-
-function handleSubmit(event) {
-    event.preventDefault();
-    let target = event.target;
-    let input = target.querySelector("input")
-    value = input.value;
-
-    if (target.id === "welcome") {
-        roomName = value;
-        socket.emit("enterRoom", value, (userNum) => {
-            roomTitle.innerText = `Room ${roomName} (${userNum})`;
-            formWelcome.hidden = true;
-            formNick.hidden = false;
-        });
-    } else if (target.id === "nickname") {
-        socket.emit("nickname", value, roomName, () => {
-            formNick.hidden = true;
-            formMSG.hidden = false;
-            chatCont.hidden = false;
-            ableToRecv = true;
-            addMSG("You login room #" + roomName + " with nickname: " + value)
-        })
-    } else if (target.id === "msg") {
-        socket.emit("newMessage", value, roomName, () => {
-            addMSG(("You: " + value))
-        });
-    }
-    input.value = "";
+async function handleChangeCamera (event) {
+	await getMedia(cameraSelect.value);
 }
 
-function addMSG(msg) {
-    let ul = room.querySelector("ul")
-    let li = document.createElement("li");
-    li.innerText = msg;
-    ul.append(li);
+function handleBtn (event) {
+	let target = event.target;
+	if (target.id === "mute") {
+		myStream.getAudioTracks()?.forEach(track =>  track.enabled = !track.enabled )
+		mute.innerText = isMute ? "Mute" : "Unmute"
+		isMute = !isMute;
+	} else if (target.id === "camera") {
+		myStream.getVideoTracks()?.forEach(track =>  track.enabled = !track.enabled )
+		camera.innerText = isCameraOff ? "Turn Camera on" : "Turn Camera off"
+		isCameraOff = !isCameraOff;
+	}
 }
 
-//socket events
-socket.on("welcome", (nick, newCount) => {
-    roomTitle.innerText = `Room ${roomName} (${newCount})`;
-    addMSG(`${nick} joined`)
-})
-socket.on("bye", (nick, newCount) => {
-    roomTitle.innerText = `Room ${roomName} (${newCount})`;
-     addMSG(`${nick} left`) 
-})
-socket.on("newMessage", addMSG);
-socket.on("nickname", addMSG);
-socket.on("roomChange", (rooms) => {
-    let ul = formWelcome.querySelector("ul");
+async function getCameras() {
+	try {
+		let devices = await navigator.mediaDevices.enumerateDevices();
+		let cameras = devices.filter(device => device.kind === "videoinput");
+		let current = myStream.getVideoTracks()[0];
 
-    ul.innerText = "";
-    rooms.forEach(room => {
-        let li = document.createElement("li");
-        li.innerText = room
-        ul.appendChild(li)
-    });
-})
+		cameras.forEach(camera => {
+			let option = document.createElement("option");
+			option.value = camera.deviceId
+			option.innerText = camera.label
+			cameraSelect.appendChild(option)
+			if (current.label === camera.label)  option.seledted = true;
+		})
+	} catch(e) {
+		console.log(e);
+	}
+}
+
+async function getMedia(deviceId) {
+	let initialConstrains = {
+		audio:true,
+		video: {facingMode: "user"}
+	}
+	let cameraConstrains = {
+		audio:true,
+		video: { deviceId : {exact: deviceId}}
+	}
+	try {
+		myStream = await navigator.mediaDevices.getUserMedia( 
+			deviceId ? cameraConstrains : initialConstrains
+		)
+		myFace.srcObject = myStream;
+		if (!deviceId) await getCameras();
+	} catch(e) {
+		console.log(e);
+	}
+}
+
+getMedia();
+
