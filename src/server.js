@@ -22,11 +22,27 @@ let server = http.createServer(app)
 let io = SocketIO(server);
 
 io.on("connection", socket => {
-	socket.on("enter_room", (roonName, done) => {
-		socket.join(roonName);
-		console.log(socket.rooms);
+	socket["nickname"] = "Anonymous"
+	socket.onAny(event => {
+		console.log(event);
+	})
+	socket.on("enterRoom", (roomName, done) => {
+		socket.join(roomName);
 		done();
+		socket.to(roomName).emit("welcome", socket.nickname)
 	});
+	socket.on("nickname", (nickname, roomName,done) => {
+		socket["nickname"] = nickname
+		socket.to(roomName).emit("nickname", `Anonymous change nickname to ${socket.nickname}`)
+		done();
+	})
+	socket.on("newMessage", (msg, roomName, done) => {
+		socket.to(roomName).emit("newMessage", `${socket.nickname}: ${msg}`);
+		done();
+	})
+	socket.on("disconnecting", () => {
+		socket.rooms.forEach(room => socket.to(room).emit("bye", socket.nickname))
+	})
 }) 
 
 // Create WebSocket Server then put it on the top of http server (on the same port)
