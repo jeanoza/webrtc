@@ -5,12 +5,20 @@ let mute = document.getElementById("mute")
 let camera = document.getElementById("camera")
 let cameraSelect = document.getElementById("cameras");
 
+let call = document.getElementById("call")
+
+call.hidden = true;
+
 let myStream;
 let isMute = false;
 let isCameraOff = false;
+let roomName;
+/** @type{RTCPeerConnection} */
+let myPeerConnection;
 
 document.querySelectorAll('button').forEach(btn => btn.addEventListener("click", handleBtn))
 cameraSelect.addEventListener("input", handleChangeCamera)
+
 
 async function handleChangeCamera (event) {
 	await getMedia(cameraSelect.value);
@@ -67,5 +75,98 @@ async function getMedia(deviceId) {
 	}
 }
 
-getMedia();
 
+// Welcome
+let welcome = document.getElementById("welcome")
+let welcomeForm = welcome.querySelector("form")
+welcomeForm.addEventListener("submit", handleSubmit)
+
+async function initCall() {
+	welcome.hidden = true;
+	call.hidden = false;
+	await getMedia();
+	//webRTC Connection
+	makeConnection();
+}
+
+async function handleSubmit (e) {
+	e.preventDefault();
+
+	let input = welcomeForm.querySelector("input");
+	await initCall();
+	roomName = input.value;
+	socket.emit("joinRoom", roomName);
+	input.value = "";
+}
+
+// Socket events
+
+/**
+ * TODO: Each Peer has to set two description(local/remote)
+ * Peer A
+ *  - setLocalDescription(offer)
+ *  - setRemoteDescription(answer)
+ * Peer B
+ * 	- setLocalDescription(answer)
+ * 	- setRemoteDescription(offer)
+ */
+
+// PeerA
+socket.on("welcome", async () => {
+	// #2-1. PeerA - createOffer()
+	let offer = await myPeerConnection.createOffer();
+	// #2-2. PeerA - setLocalDescription(offer)
+	myPeerConnection.setLocalDescription(offer);
+	// #2-3. PeerA - send this offer to server
+	console.log("sent the offer(peerA)")
+	socket.emit("offer", offer, roomName);
+})
+// PeerB
+socket.on("offer", async (offer) => {
+	// #4-1. PeerB - receive offer then setRemoteDescription(offer)
+	console.log("receive offer(peerB)");
+	myPeerConnection.setRemoteDescription(offer);
+	// #4-2. PeerB - create answer 
+	let answer = await myPeerConnection.createAnswer()
+	// #4-3. PeerB - setLocalDescription(answer)
+	myPeerConnection.setLocalDescription(answer)
+	// #4-4. PeerB - send this answer to server
+	socket.emit("answer", answer, roomName)
+	console.log("send answer(peerB)")
+})
+// PeerA
+socket.on("answer", async (answer) => {
+	// #5-1. PeerA - receive answer and setRemoteDescription(answer)
+	console.log("receive answer(peerA)")
+	myPeerConnection.setRemoteDescription(answer)
+})
+
+// Ice candidate
+socket.on("ice", ice => {
+	console.log("receive candidate")
+	myPeerConnection.addIceCandidate(ice);
+})
+
+
+
+// WebRTC 
+function makeConnection () {
+	myPeerConnection = new RTCPeerConnection();
+	myPeerConnection.addEventListener("icecandidate", handleIce)
+	myPeerConnection.addEventListener("addstream", handleAddStream)
+	
+	// #1. Peer to Peer Connection in Client - .addTrack(track, stream0...) - add track(stream) to RTCPeerConnection
+	myStream
+		.getTracks()
+		.forEach(track => myPeerConnection.addTrack(track, myStream))
+}
+
+function handleIce(data) {
+	console.log("send candidate");
+	socket.emit("ice", data.candidate, roomName)
+}
+
+function handleAddStream(data) {
+	let peerFace = document.getElementById("peerFace")
+	peerFace.srcObject = data.stream
+}
