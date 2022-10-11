@@ -159,9 +159,27 @@ socket.on("ice", ice => {
 
 // WebRTC 
 function makeConnection () {
-	myPeerConnection = new RTCPeerConnection();
+	//FIXME: need STUN Server to find public address
+	// This configuration is only to test
+	myPeerConnection = new RTCPeerConnection({
+		iceServers : [
+			{
+				urls: [
+					"stun:stun.l.google.com:19302",
+					"stun:stun1.l.google.com:19302",
+					"stun:stun2.l.google.com:19302",
+					"stun:stun3.l.google.com:19302",
+					"stun:stun4.l.google.com:19302",
+				]
+			}
+		]
+
+	});
 	myPeerConnection.addEventListener("icecandidate", handleIce)
-	myPeerConnection.addEventListener("addstream", handleAddStream)
+	// addstream event not work in safari.
+	// the reason why I use track event
+	// https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/addstream_event
+	myPeerConnection.addEventListener("track", handleTrack)
 	
 	// #1. Peer to Peer Connection in Client - .addTrack(track, stream0...) - add track(stream) to RTCPeerConnection
 	myStream
@@ -174,7 +192,8 @@ function handleIce(data) {
 	socket.emit("ice", data.candidate, roomName)
 }
 
-function handleAddStream(data) {
+
+function handleTrack(data) {
 	let peerFace = document.getElementById("peerFace")
-	peerFace.srcObject = data.stream
+	peerFace.srcObject = data.streams[0]
 }
