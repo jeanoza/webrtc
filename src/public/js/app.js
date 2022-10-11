@@ -22,6 +22,14 @@ cameraSelect.addEventListener("input", handleChangeCamera)
 
 async function handleChangeCamera (event) {
 	await getMedia(cameraSelect.value);
+	// code to handle change peer's camera
+	if (myPeerConnection) {
+		let videoTrack = myStream.getVideoTracks()[0]
+		let videoSender = myPeerConnection
+			.getSenders()
+			.find(sender => sender.track.kind === "video")
+		videoSender.replaceTrack(videoTrack)
+	}
 }
 
 function handleBtn (event) {
