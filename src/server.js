@@ -1,8 +1,7 @@
-
-
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io"
+import {webrtc} from "webrtc"
 
 let app = express();
 let PORT = process.env.PORT || 3000;
@@ -20,21 +19,47 @@ let httpServer = createServer(app);
 
 let io = new Server(httpServer)
 
+function publicRooms () {
+	let {sockets : {adapter: {sids, rooms}}} = io;
+
+	let publicRooms = [];
+	rooms.forEach((_, key) => {
+		if (sids.get(key) === undefined) publicRooms.push(key)
+	})
+	return publicRooms;
+}
+
+let userCameras = {};
+
 io.on("connection", socket => {
     socket.on("joinRoom", (roomName) => {
         socket.join(roomName);
+        if (!userCameras[roomName]) 
+            userCameras[roomName] = new Map();
+
+        userCameras[roomName].set(socket.id, {});
         socket.to(roomName).emit("welcome");
     })
-
-    // #3. Peer to peer in server: receive 'offer' from Peer A then send offer to Peer B
     socket.on("offer", (offer, roomName) => {
-        socket.to(roomName).emit("offer", offer);
-    })
-    socket.on("answer", (answer, roomName) => {
-        socket.to(roomName).emit("answer", answer);
-    })
-    socket.on("ice", (ice, roomName) => {
-        socket.to(roomName).emit("ice", ice);
+        let current = userCameras[roomName].get(socket.id);
+        if (!current["offer"]) {
+            current["offer"] = offer;
+            /** @type{RTCPeerConnection} */
+            let peerServer = new webrtc.RTCPeerConnection({
+                iceServers : [
+                    {
+                        urls: [
+                            "stun:stun.l.google.com:19302",
+                            "stun:stun1.l.google.com:19302",
+                            "stun:stun2.l.google.com:19302",
+                            "stun:stun3.l.google.com:19302",
+                            "stun:stun4.l.google.com:19302",
+                        ]
+                    }
+                ]
+            })
+        }
+        console.log(userCameras);
     })
 })
 
